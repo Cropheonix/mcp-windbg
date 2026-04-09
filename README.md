@@ -1,195 +1,234 @@
 # MCP Server for WinDbg Crash Analysis
 
-A Model Context Protocol server that bridges AI models with WinDbg for crash dump analysis and remote debugging.
+MCP WinDbg is a Model Context Protocol server for Windows crash dump analysis and remote debugging. It wraps WinDbg/CDB so an MCP-compatible client can inspect dumps, query debugger state, and run targeted commands from natural language.
 
 <!-- mcp-name: io.github.svnscha/mcp-windbg -->
 
-## Overview
+## What It Does
 
-This MCP server integrates with [CDB](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/opening-a-crash-dump-file-using-cdb) to enable AI models to analyze Windows crash dumps and connect to remote debugging sessions using WinDbg/CDB.
+- Analyze crash dumps with WinDbg/CDB
+- Connect to remote debugging sessions
+- Return structured summaries for common debugger output
+- Preserve raw WinDbg command access for advanced investigations
 
-## What is this?
+This project is best for:
 
-An AI-powered tool that bridges LLMs with WinDbg for crash dump analysis and live debugging. Execute debugger commands through natural language queries like *"Show me the call stack and explain this access violation"*.
+- Crash triage
+- Hang and deadlock investigation
+- Symbol and stack analysis
+- Thread, memory, and lock inspection
 
-## What This is Not
+It is not an auto-fix tool. It is a debugger bridge that helps an AI assistant ask better questions and interpret the results.
 
-Not a magical auto-fix solution. It's a Python wrapper around CDB that leverages LLM knowledge to assist with debugging.
+## Requirements
 
-## Usage Modes
+- Windows
+- WinDbg or CDB installed
+- Python 3.10+
+- An MCP-compatible client such as Claude Desktop, Cursor, VS Code, Cline, or Windsurf
 
-- **Crash Dump Analysis**: Examine Windows crash dumps
-- **Live Debugging**: Connect to remote debugging targets
-- **Directory Analysis**: Process multiple dumps for patterns
+Useful environment variables:
 
-## Quick Start
+- `CDB_PATH` to point at a custom `cdb.exe`
+- `_NT_SYMBOL_PATH` to define your symbol search path
 
-### Prerequisites
-- Windows with [Debugging Tools for Windows](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) or [WinDbg from Microsoft Store](https://apps.microsoft.com/detail/9pgjgd53tn86).
-- Python 3.10 or higher
-- Any MCP-compatible client (GitHub Copilot, Claude Desktop, Cline, Cursor, Windsurf etc.)
-- Configure MCP server in your chosen client
+## Installation
 
-> [!TIP]
-> In enterprise environments, MCP server usage might be restricted by organizational policies. Check with your IT team about AI tool usage and ensure you have the necessary permissions before proceeding.
+### From PyPI
 
-### Installation
-```bash
+```powershell
 pip install mcp-windbg
 ```
 
-## Transport Options
+### From Source
 
-The MCP server supports multiple transport protocols:
-
-| Transport | Description | Use Case |
-|-----------|-------------|----------|
-| `stdio` (default) | Standard input/output | Local MCP clients like VS Code, Claude Desktop |
-| `streamable-http` | Streamable HTTP | Modern HTTP clients with bidirectional streaming |
-
-### Starting with Different Transports
-
-**Standard I/O (default):**
-```bash
-mcp-windbg
-# or explicitly
-mcp-windbg --transport stdio
+```powershell
+git clone https://github.com/Cropheonix/mcp-windbg.git
+cd mcp-windbg
+uv sync --dev
 ```
 
-**Streamable HTTP:**
-```bash
+## Running The Server
+
+### Stdio Transport
+
+This is the default mode and works best for local MCP clients.
+
+```powershell
+mcp-windbg
+```
+
+You can also run it directly from Python:
+
+```powershell
+python -m mcp_windbg
+```
+
+### Streamable HTTP Transport
+
+Use this when your client connects over HTTP or you want to run the server separately.
+
+```powershell
 mcp-windbg --transport streamable-http --host 127.0.0.1 --port 8000
 ```
-Endpoint: `http://127.0.0.1:8000/mcp`
 
-### Command Line Options
+The MCP endpoint is:
 
-```
---transport {stdio,streamable-http}  Transport protocol (default: stdio)
---host HOST                              HTTP server host (default: 127.0.0.1)
---port PORT                              HTTP server port (default: 8000)
---cdb-path PATH                          Custom path to cdb.exe
---symbols-path PATH                      Custom symbols path
---timeout SECONDS                        Command timeout (default: 30)
---verbose                                Enable verbose output
+```text
+http://127.0.0.1:8000/mcp
 ```
 
+## Command Line Options
 
-## Configuration for Visual Studio Code
+```text
+--cdb-path PATH          Custom path to cdb.exe
+--symbols-path PATH      Custom symbol path
+--timeout SECONDS        Command timeout in seconds (default: 30)
+--verbose                Enable verbose logging
+--transport              stdio or streamable-http (default: stdio)
+--host HOST              HTTP bind host (default: 127.0.0.1)
+--port PORT              HTTP bind port (default: 8000)
+--source-roots PATH...   Source roots for future source correlation
+```
 
-To make MCP servers available in all your workspaces, use the global user configuration:
+## Client Setup
 
-1. Press `F1`, type `>` and select **MCP: Open User Configuration**.
-2. Paste the following JSON snippet into your user configuration:
+### Visual Studio Code
+
+Open the MCP configuration UI and add a server entry like this:
 
 ```json
 {
-    "servers": {
-        "mcp_windbg": {
-            "type": "stdio",
-            "command": "python",
-            "args": ["-m", "mcp_windbg"],
-            "env": {
-                "_NT_SYMBOL_PATH": "SRV*C:\\Symbols*https://msdl.microsoft.com/download/symbols"
-            }
-        }
+  "servers": {
+    "mcp_windbg": {
+      "type": "stdio",
+      "command": "mcp-windbg",
+      "args": [],
+      "env": {
+        "_NT_SYMBOL_PATH": "SRV*C:\\Symbols*https://msdl.microsoft.com/download/symbols"
+      }
     }
+  }
 }
 ```
 
-This enables MCP Windbg in any workspace, without needing a local `.vscode/mcp.json` file.
+If you prefer HTTP transport, point the client at:
 
-### HTTP Transport Configuration
-
-For scenarios where you need to run the MCP server separately (e.g., remote access, shared server, or debugging the server itself), you can use the HTTP transport:
-
-**1. Start the server manually:**
-```bash
-python -m mcp_windbg --transport streamable-http --host 127.0.0.1 --port 8000
-```
-
-**2. Configure VS Code to connect via HTTP:**
 ```json
 {
-    "servers": {
-        "mcp_windbg_http": {
-            "type": "http",
-            "url": "http://localhost:8000/mcp"
-        }
+  "servers": {
+    "mcp_windbg_http": {
+      "type": "http",
+      "url": "http://127.0.0.1:8000/mcp"
     }
+  }
 }
 ```
 
-> **Workspace-specific and alternative configuration**: See [Installation documentation](https://github.com/svnscha/mcp-windbg/wiki/Installation) for details on configuring Claude Desktop, Cline, and other clients, or for workspace-only setup.
+### Claude Desktop / Other MCP Clients
 
-Once configured, restart your MCP client and start debugging:
+Use the same idea:
 
+- Start `mcp-windbg` in `stdio` mode for local integrations
+- Start `mcp-windbg --transport streamable-http ...` for HTTP clients
+- Set `CDB_PATH` if WinDbg/CDB is not on the default path
+- Set `_NT_SYMBOL_PATH` if you want symbol server caching
+
+## Recommended Workflow
+
+1. Open a crash dump with `open_windbg_dump` or connect to a live target with `open_windbg_remote`.
+2. Start triage with `dump_summary`, `exception_context`, `stack_frames`, `module_status`, and `thread_list`.
+3. Use deeper tools when needed:
+   - `cpp_exception` for C++ exception records
+   - `lock_status` for deadlock or critical section analysis
+   - `cpp_object` for object inspection
+   - `heap_block` for heap corruption or allocation tracing
+   - `thread_cpu` for runaway thread analysis
+   - `handles` for handle leak investigation
+   - `frame_locals` for per-frame locals
+   - `read_memory` for raw memory inspection
+4. Fall back to `run_windbg_cmd` when you need a raw WinDbg command that is not exposed as a dedicated tool.
+
+## Tool Reference
+
+### Session Management
+
+| Tool | Purpose |
+|------|---------|
+| `open_windbg_dump` | Open a crash dump and begin analysis |
+| `open_windbg_remote` | Connect to a remote debugging target |
+| `close_windbg_dump` | Close a dump session |
+| `close_windbg_remote` | Close a remote session |
+| `list_windbg_dumps` | Discover local dump files |
+| `send_ctrl_break` | Break into the active debugger session |
+| `run_windbg_cmd` | Run a raw WinDbg command |
+
+### Structured Analysis
+
+| Tool | Purpose |
+|------|---------|
+| `dump_summary` | High-level crash summary |
+| `stack_frames` | Parsed stack trace for the current thread |
+| `module_status` | Loaded module information |
+| `exception_context` | Exception record, last event, and registers |
+| `thread_list` | Debugger thread list |
+| `frame_locals` | Local variables for a frame |
+| `read_memory` | Read memory at an address |
+
+### Deeper Investigation
+
+| Tool | Purpose |
+|------|---------|
+| `cpp_exception` | Inspect C++ exception records |
+| `lock_status` | Inspect critical sections and locks |
+| `cpp_object` | Inspect C++ object layout |
+| `heap_block` | Analyze a heap block |
+| `thread_cpu` | Show CPU time by thread |
+| `handles` | Inspect handle usage |
+
+## Example Prompts
+
+- "Open the dump and give me a concise triage summary."
+- "Show me the current exception context and explain the likely root cause."
+- "Compare the top user frames and highlight anything suspicious."
+- "Check for lock contention or deadlocks."
+- "Inspect this heap address and tell me whether it looks corrupted."
+- "Break into the live target and show all thread stacks."
+
+## Troubleshooting
+
+### WinDbg/CDB Not Found
+
+If the server cannot locate `cdb.exe`, set `CDB_PATH` explicitly.
+
+### Symbols Are Missing
+
+Set `_NT_SYMBOL_PATH` or use `--symbols-path` so WinDbg can resolve symbols.
+
+### No Dumps Appear
+
+The `list_windbg_dumps` tool looks in the configured local dump directory. If nothing appears, make sure your dumps exist and that your client has access to the directory.
+
+### Version Mismatch
+
+Run the consistency check:
+
+```powershell
+.\scripts\check-version-consistency.ps1
 ```
-Analyze the crash dump at C:\dumps\app.dmp
+
+## Development
+
+```powershell
+uv sync --dev
+uv run pytest src/mcp_windbg/tests/ -v
 ```
 
-## MCP Compatibility
+To run the server in development:
 
-This server implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), making it compatible with any MCP-enabled client:
-
-The beauty of MCP is that you write the server once, and it works everywhere. Choose your favorite AI assistant!
-
-### Tools
-
-| Tool | Purpose | Use Case |
-|------|---------|----------|
-| [`list_windbg_dumps`](https://github.com/svnscha/mcp-windbg/wiki/Tools#list_windbg_dumps) | List crash dump files | Discovery and batch analysis |
-| [`open_windbg_dump`](https://github.com/svnscha/mcp-windbg/wiki/Tools#open_windbg_dump) | Analyze crash dumps | Initial crash dump analysis |
-| [`close_windbg_dump`](https://github.com/svnscha/mcp-windbg/wiki/Tools#close_windbg_dump) | Cleanup dump sessions | Resource management |
-| [`open_windbg_remote`](https://github.com/svnscha/mcp-windbg/wiki/Tools#open_windbg_remote) | Connect to remote debugging | Live debugging sessions |
-| [`close_windbg_remote`](https://github.com/svnscha/mcp-windbg/wiki/Tools#close_windbg_remote) | Cleanup remote sessions | Resource management |
-| [`run_windbg_cmd`](https://github.com/svnscha/mcp-windbg/wiki/Tools#run_windbg_cmd) | Execute WinDbg commands | Custom analysis and investigation |
-| [`send_ctrl_break`](https://github.com/svnscha/mcp-windbg/wiki/Tools#send_ctrl_break) | Break into a running target | Interrupt execution during live debugging |
-
-## Documentation
-
-**[Documentation](https://github.com/svnscha/mcp-windbg/wiki)**
-
-| Topic | Description |
-|-------|-------------|
-| **[Getting Started](https://github.com/svnscha/mcp-windbg/wiki/Getting-Started)** | Quick setup and first steps |
-| **[Installation](https://github.com/svnscha/mcp-windbg/wiki/Installation)** | Detailed installation for pip, MCP registry, and from source |
-| **[Usage](https://github.com/svnscha/mcp-windbg/wiki/Usage)** | MCP client integration, command-line usage, and workflows |
-| **[Tools Reference](https://github.com/svnscha/mcp-windbg/wiki/Tools)** | Complete API reference and examples |
-| **[Troubleshooting](https://github.com/svnscha/mcp-windbg/wiki/Troubleshooting)** | Common issues and solutions |
-
-## Examples
-
-### Crash Dump Analysis
-
-> Analyze this heap address with !heap -p -a 0xABCD1234 and check for buffer overflow"
-
-> Execute !peb and tell me if there are any environment variables that might affect this crash"
-
-> Run .ecxr followed by k and explain the exception's root cause"
-
-### Remote Debugging
-
-> "Connect to tcp:Port=5005,Server=192.168.0.100 and show me the current thread state"
-
-> "Send CTRL+BREAK to the live session, then dump all thread stacks with ~*k"
-
-> "Check for timing issues in the thread pool with !runaway and !threads"
-
-> "Show me all threads with ~*k and identify which one is causing the hang"
-
-## Blog
-
-Read about the development journey: [The Future of Crash Analysis: AI Meets WinDbg](https://svnscha.de/posts/ai-meets-windbg/)
-
-### Links
-
-- [Reddit: I taught Copilot to analyze Windows Crash Dumps](https://www.reddit.com/r/programming/comments/1kes3wq/i_taught_copilot_to_analyze_windows_crash_dumps/)
-- [Hackernews: AI Meets WinDbg](https://news.ycombinator.com/item?id=43892096)
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=svnscha/mcp-windbg&type=Date)](https://www.star-history.com/#svnscha/mcp-windbg&Date)
+```powershell
+uv run python -m mcp_windbg --verbose
+```
 
 ## License
 

@@ -1,0 +1,10 @@
+0:000> start             end                 module name
+00007ff7`00130000 00007ff7`00167000   DemoCrash1 C (no symbols)
+    Loaded symbol image file: DemoCrash1.exe
+    Image path: C:\Users\vm\source\repos\DemoCrash1\x64\Release\DemoCrash1.exe
+    Image name: DemoCrash1.exe
+    Timestamp:        Sat May  3 00:44:00 2025 (6814F650)
+    CheckSum:         00000000
+    ImageSize:        00037000
+    Translations:     0000.04b0 0000.04e4 0409.04b0 0409.04e4
+    Information from resource tables:

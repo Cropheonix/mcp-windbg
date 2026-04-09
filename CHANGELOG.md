@@ -5,6 +5,45 @@ All notable changes to the MCP Server for WinDbg Crash Analysis project will be 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-04-08
+
+### Added
+
+- **Structured Analysis Tools**: Four new MCP tools with parsed, typed output:
+  - `analyze_dump_summary`: Comprehensive dump analysis in a single call with structured JSON output
+  - `get_stack_frames`: Parsed stack frames with automatic labeling (user/framework/system code)
+  - `get_modules_status`: Module list with symbol status and warnings
+  - `get_exception_context`: Structured exception info with human-readable exception types
+- **Iterative Debugging Tools**: Three tools for step-by-step crash investigation:
+  - `list_threads`: List all threads with state information
+  - `get_frame_locals`: Switch to a stack frame and inspect local variables
+  - `read_memory`: Read memory at a given address (hex, dword, qword, unicode, ascii)
+- **C++ Deep Debugging Tools**: Six tools for advanced C++ crash analysis:
+  - `get_cpp_exception`: Inspect C++ exception details via `.exr -1`
+  - `get_lock_status`: Check critical section / lock status with waiter detection for deadlock diagnosis (`!locks -v`)
+  - `inspect_cpp_object`: Display C++ object structure via `dt` command
+  - `analyze_heap_block`: Heap block analysis and heap summary via `!heap`
+  - `analyze_thread_cpu`: Thread CPU time analysis via `!runaway` — identify CPU-hot threads
+  - `check_handles`: Handle leak detection via `!handle` — summary by type and type-specific filtering
+- **Output Tiering**: All new tools support `detail_level` parameter (summary/structured/raw_excerpt/raw_full)
+- **CDB Output Parsers**: Seven parsers for `!analyze -v`, `k/kv`, `lm/lmv`, `.ecxr/.lastevent/r`, `~`, `dv`, memory output
+- **Frame Labeling**: Automatic classification of stack frames as user code, Qt/framework code, or system code
+- **Session-Level Caching**: `CommandRunner` caches deterministic commands (lm, !analyze -v, .ecxr, etc.) per session
+- **Modular Architecture**: Refactored into session/, adapters/, parsers/, tools/, models/ packages
+- **Exception Code Map**: 25 common Windows exception codes mapped to human-readable names
+
+### Changed
+
+- **Existing tools refactored**: Legacy 7 tools now use WinDbgAdapter + parsers internally while maintaining backward-compatible output
+- **Server architecture**: `server.py` is now a thin registration shell; session management moved to `SessionManager` class
+- **CLI**: Added `--source-roots` argument for source code directory configuration (Phase 2 integration)
+- **Lock analysis enhanced**: `get_lock_status` now uses `!locks -v`, parses owning thread, recursion count, waiter threads, and detects deadlock patterns
+- **dump-triage prompt updated**: Rewritten to use structured tools (analyze_dump_summary, get_stack_frames, etc.) instead of legacy workflow
+
+### Deprecated
+
+- Module-level `get_or_create_session`, `unload_session`, `active_sessions` — use `SessionManager` class instead
+
 ## [0.13.0] - 2026-03-18
 
 ### Added

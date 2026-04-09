@@ -39,9 +39,27 @@ try {
     
     $serverJsonContent = Get-Content "server.json" -Raw | ConvertFrom-Json
     $SERVER_VERSION = $serverJsonContent.version
-    $PACKAGE_VERSION = $serverJsonContent.packages[0].version
     Write-Host "INFO: server.json version: $SERVER_VERSION" -ForegroundColor Green
-    Write-Host "INFO: server.json package version: $PACKAGE_VERSION" -ForegroundColor Green
+
+    if (-not $serverJsonContent.packages -or $serverJsonContent.packages.Count -eq 0) {
+        throw "Could not find packages in server.json"
+    }
+
+    for ($index = 0; $index -lt $serverJsonContent.packages.Count; $index++) {
+        $package = $serverJsonContent.packages[$index]
+        $packageVersion = $package.version
+        $packageLabel = "package[$index]"
+        if ($package.transport -and $package.transport.type) {
+            $packageLabel = $package.transport.type
+        } elseif ($package.identifier) {
+            $packageLabel = $package.identifier
+        }
+
+        if (-not $packageVersion) {
+            throw "Could not find version in server.json package[$index] ($packageLabel)"
+        }
+        Write-Host "INFO: server.json package[$index] ($packageLabel) version: $packageVersion" -ForegroundColor Green
+    }
     
     # Extract version from CHANGELOG.md
     if (-not (Test-Path "CHANGELOG.md")) {
@@ -62,8 +80,24 @@ try {
         $errors += "Version mismatch: pyproject.toml ($PYPROJECT_VERSION) != server.json ($SERVER_VERSION)"
     }
     
-    if ($PYPROJECT_VERSION -ne $PACKAGE_VERSION) {
-        $errors += "Version mismatch: pyproject.toml ($PYPROJECT_VERSION) != server.json package ($PACKAGE_VERSION)"
+    for ($index = 0; $index -lt $serverJsonContent.packages.Count; $index++) {
+        $package = $serverJsonContent.packages[$index]
+        $packageVersion = $package.version
+        $packageLabel = "package[$index]"
+        if ($package.transport -and $package.transport.type) {
+            $packageLabel = $package.transport.type
+        } elseif ($package.identifier) {
+            $packageLabel = $package.identifier
+        }
+
+        if (-not $packageVersion) {
+            $errors += "Missing version in server.json package[$index] ($packageLabel)"
+            continue
+        }
+
+        if ($PYPROJECT_VERSION -ne $packageVersion) {
+            $errors += "Version mismatch: pyproject.toml ($PYPROJECT_VERSION) != server.json package[$index] ($packageLabel) ($packageVersion)"
+        }
     }
     
     if ($PYPROJECT_VERSION -ne $CHANGELOG_VERSION) {
@@ -71,8 +105,8 @@ try {
     }
     
     if ($errors.Count -gt 0) {
-        foreach ($error in $errors) {
-            Write-Host "ERROR: $error" -ForegroundColor Red
+        foreach ($versionError in $errors) {
+            Write-Host "ERROR: $versionError" -ForegroundColor Red
         }
         exit 1
     }

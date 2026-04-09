@@ -1,0 +1,2 @@
+0:000> Last event: 1bb0.251c: Access violation - code c0000005 (first/second chance not available)
+  debugger time: Wed Apr  8 16:47:46.368 2026 (UTC + 8:00)

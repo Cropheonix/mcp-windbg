@@ -1,4 +1,4 @@
-Perform comprehensive analysis of a single Windows crash dump with detailed metadata extraction, call stack analysis, and structured markdown reporting.
+Perform comprehensive analysis of a single Windows crash dump using structured debugging tools, with detailed metadata extraction, call stack analysis, and structured markdown reporting.
 
 ## WORKFLOW - Execute in this exact sequence:
 
@@ -6,32 +6,84 @@ Perform comprehensive analysis of a single Windows crash dump with detailed meta
 **If no dump file path provided:**
 - Ask user to provide the specific crash dump file path, use `list_windbg_dumps` to help them find available dumps.
 
-### Step 2: Comprehensive Dump Analysis
-**Analyze the specified dump file:**
+### Step 2: Comprehensive Dump Analysis (Structured Tools)
 
-**Tool:** `open_windbg_dump`
-- **Parameters:**
-  - `dump_path`: Provided dump file path
-  - `include_stack_trace`: true
-  - `include_modules`: true
-  - `include_threads`: true
+**2a. Full dump summary (single call):**
+**Tool:** `analyze_dump_summary`
+- **Parameters:** `dump_path`: Provided dump file path, `detail_level`: "structured"
 
-The `open_windbg_dump` tool automatically runs `!analyze -v` and provides initial analysis output.
+This runs `!analyze -v`, `.ecxr`, `r`, `lm`, and `kv` in one call, returning parsed exception code, faulting module, stack frames, modules with symbol warnings, and raw output.
 
-If the dump is very large (>5GB) or analysis takes too long we eventually timeout. In that case, inform the user about the timeout
-and tell him to wait since the analysis keeps running in the background and will complete. The most obvious reason is downloading symbols for running into a timeout here.
+**2b. Examine the crashing thread's stack in detail:**
+**Tool:** `get_stack_frames`
+- **Parameters:** `dump_path`: Provided dump file path, `stack_command`: "kv", `detail_level`: "structured"
 
-**Then extract additional metadata with:** `run_windbg_cmd`
-- **Command 1:** `vertarget` (OS version and platform details)
-- **Command 2:** `lm` (loaded modules list)
-- **Command 3:** `k` (call stack)
-- **Command 4:** `.time` (dump creation time)
-- **Command 5:** `!peb` (process environment details)
-- **Command 6:** `r` (registers)
+Review the parsed stack frames with automatic labeling:
+- `user` = your application code
+- `framework` = Qt/Framework code
+- `system` = OS/Runtime code
 
-**Then cleanup:** `close_windbg_dump`
+**2c. Check for C++ exception details (if exception code is 0xE06D7363):**
+**Tool:** `get_cpp_exception`
+- **Parameters:** `dump_path`: Provided dump file path, `detail_level`: "structured"
 
-### Step 3: Generate Structured Analysis Report
+**2d. Get structured exception context:**
+**Tool:** `get_exception_context`
+- **Parameters:** `dump_path`: Provided dump file path, `detail_level`: "structured"
+
+**2e. Check module symbol status:**
+**Tool:** `get_modules_status`
+- **Parameters:** `dump_path`: Provided dump file path, `detail_level`: "structured"
+
+Review symbol warnings — missing symbols for user modules means analysis will be limited.
+
+### Step 3: Deep Investigation (Iterative Tools)
+
+Based on the initial analysis, selectively use these tools:
+
+**3a. Examine other threads (if multi-threading issue suspected):**
+**Tool:** `list_threads`
+- **Parameters:** `dump_path`, `include_stacks`: true, `detail_level`: "structured"
+
+**3b. Inspect local variables in a specific stack frame:**
+**Tool:** `get_frame_locals`
+- **Parameters:** `dump_path`, `frame_number`: (from stack trace, e.g. 0, 1, 2), `detail_level`: "structured"
+
+**3c. Read memory at suspicious addresses:**
+**Tool:** `read_memory`
+- **Parameters:** `dump_path`, `address`: (hex address), `format`: "hex"|"dword"|"qword"|"unicode"|"ascii", `detail_level`: "structured"
+
+**3d. Check for deadlocks (if hang/deadlock suspected):**
+**Tool:** `get_lock_status`
+- **Parameters:** `dump_path`, `detail_level`: "structured"
+
+**3e. Inspect C++ object at an address (if object corruption suspected):**
+**Tool:** `inspect_cpp_object`
+- **Parameters:** `dump_path`, `address`: (hex address), `type_name`: (optional, e.g. "MyApp!MainWindow"), `detail_level`: "structured"
+
+**3f. Analyze heap block (if heap corruption / use-after-free suspected):**
+**Tool:** `analyze_heap_block`
+- **Parameters:** `dump_path`, `address`: (hex address of suspected block), `detail_level`: "structured"
+- Or without address for heap summary: `dump_path`, `detail_level`: "structured"
+
+**3g. Additional commands (for anything not covered above):**
+**Tool:** `run_windbg_cmd`
+- Useful commands: `vertarget` (OS details), `.time` (dump timestamp), `!peb` (process environment)
+
+**3h. Analyze thread CPU usage (if hang / CPU spike suspected):**
+**Tool:** `analyze_thread_cpu`
+- **Parameters:** `dump_path`, `detail_level`: "structured"
+
+**3i. Check handle usage (if resource leak suspected):**
+**Tool:** `check_handles`
+- **Parameters:** `dump_path`, `detail_level`: "structured"
+- Optionally filter: `handle_type`: "File" / "Event" / "Mutex" / "Section"
+
+### Step 4: Cleanup
+**Tool:** `close_windbg_dump`
+- **Parameters:** `dump_path`: Provided dump file path
+
+### Step 5: Generate Structured Analysis Report
 
 ## REQUIRED OUTPUT FORMAT:
 
@@ -42,68 +94,48 @@ and tell him to wait since the analysis keeps running in the background and will
 **File Path:** [Full path to dump file]
 
 ## Executive Summary
-- **Crash Type:** [Exception type - Access Violation, Heap Corruption, etc.]
+- **Crash Type:** [Exception type - Access Violation, Heap Corruption, C++ Exception, etc.]
 - **Severity:** [Critical/High/Medium/Low]
 - **Root Cause:** [Brief description of the identified issue]
 - **Recommended Action:** [Immediate next steps]
 
 ## Dump Metadata
 - **File Size:** [MB]
-- **Creation Time:** [Date/Time from .time command]
-- **OS Build:** [Windows version and build from vertarget]
+- **Creation Time:** [Date/Time]
+- **OS Build:** [Windows version and build]
 - **Platform:** [x86/x64/ARM64]
 - **Process Name:** [Process name and PID]
 - **Process Path:** [Full executable path]
-- **Command Line:** [Process command line arguments]
-- **Working Directory:** [Process working directory]
 
 ## Crash Analysis
 **Exception Details:**
 - **Exception Code:** [0xC0000005, etc.]
+- **Exception Type:** [Access Violation / C++ Exception / etc.]
 - **Exception Address:** [0x12345678]
 - **Faulting Module:** [module.dll or module.exe]
-- **Module Version:** [File version]
-- **Module Timestamp:** [Build timestamp]
-- **Module Base Address:** [0x12345678]
+- **Faulting Symbol:** [module!function+offset]
 
 **Call Stack Analysis:**
 
-Frame Module!Function+Offset                               Parameters
-===== ================================================== ==================
-[0]   module!function+0x123                              param1, param2, param3
-[1]   module!function+0x456                              param1, param2
-[2]   module!function+0x789                              param1
-[3]   module!function+0xabc
-[4]   module!function+0xdef
-[5]   [Continue with full stack...]
+Frame Label     Module!Function+Offset
+===== ========= ==================================================
+[0]   user      MyApp!CMainWindow::OnButtonClick+0x3c
+[1]   framework Qt6Widgets!QAbstractButton::clicked+0x42
+[2]   framework Qt6Core!QMetaObject::activate+0x120
+[3]   user      MyApp!CMainWindow::qt_static_metacall+0x18
+[4]   system    USER32!DispatchMessageW+0x1a3
+...
 
 **Thread Information:**
 - **Crashing Thread ID:** [Thread ID]
 - **Thread Count:** [Total threads]
-- **Other Notable Threads:** [List any threads of interest]
-
-## Technical Details
-
-**Memory Information:**
-- **Virtual Size:** [Size from !peb]
-- **Working Set:** [Size]
-- **Heap Information:** [Heap details if relevant]
-
-**Loaded Modules Summary:**
-| Module | Base Address | Size | Path |
-|--------|--------------|------|------|
-| [Primary modules of interest] | | | |
-
-**Environment Details:**
-- **Current Directory:** [From !peb]
-- **Environment Variables:** [Key variables if relevant]
-- **Command Line:** [Full command line from !peb]
+- **Notable Threads:** [Threads with interesting stacks or state]
 
 ## Root Cause Analysis
 [Detailed explanation of what caused the crash, including:]
 - **What happened:** [Technical description of the failure]
 - **Why it happened:** [Analysis of contributing factors]
-- **Code location:** [Specific function/line if identifiable]
+- **Code location:** [Specific function/line if identifiable — focus on user-labeled frames]
 - **Memory state:** [Description of memory corruption, null pointers, etc.]
 
 ## Recommendations
@@ -111,51 +143,38 @@ Frame Module!Function+Offset                               Parameters
 ### Immediate Actions
 1. [Specific action item 1]
 2. [Specific action item 2]
-3. [Specific action item 3]
 
 ### Investigation Steps
-1. [Follow-up analysis steps]
+1. [Follow-up analysis steps — suggest specific tools if needed]
 2. [Code review recommendations]
 3. [Testing scenarios to reproduce]
 
 ### Prevention Measures
 1. [Code changes to prevent recurrence]
 2. [Additional validation/checks needed]
-3. [Process improvements]
 
 ## Priority Assessment
 **Severity:** [Critical/High/Medium/Low]
-
-**Justification:** [Explanation of why this severity was assigned based on:]
-- Impact on users/system stability
-- Frequency of occurrence (if known)
-- Ease of reproduction
-- Potential for data loss or security issues
-
-## Additional Notes
-[Any other relevant observations, similar crashes seen, or context that might be helpful for developers]
+**Justification:** [Based on impact, frequency, ease of reproduction, data loss potential]
 ```
 
-## METADATA EXTRACTION REQUIREMENTS:
-Extract and include ALL of the following for the dump file:
-- **OS Information:** Build number, version, platform (x86/x64/ARM64) from `vertarget`
-- **Process Details:** Name, PID, command line, working directory from `!peb`
-- **Exception Information:** Code, type, address, parameters from initial analysis
-- **Module Information:** Name, base address, size from `lm`
-- **Call Stack:** Stack with frame numbers, modules, functions, offsets from `k`
-- **Timing:** Dump creation time from `.time`
-- **Memory Information:** Virtual size, working set, commit charge from `!peb`
-- **Thread Information:** Thread count and details from initial analysis
+## ANALYSIS GUIDELINES:
 
-## ANALYSIS DEPTH:
-Provide comprehensive technical details suitable for developers to:
-- Understand the exact failure mechanism
-- Identify the root cause in source code
-- Implement appropriate fixes
-- Prevent similar issues in the future
+- **Focus on user-labeled frames**: These are your application code — the root cause is usually here
+- **Framework frames provide context**: Qt/Framework calls show the execution path but are rarely the root cause
+- **System frames are usually innocent**: ntdll/kernel32 crashes usually indicate corruption from earlier user code
+- **Missing symbols = limited analysis**: If user modules have no symbols, note this and suggest obtaining PDBs
+- **Exception code drives investigation**: Different exception codes require different follow-up tools
+  - 0xC0000005 (Access Violation): Check memory address, inspect objects at faulting address
+  - 0xC0000374 (Heap Corruption): Use analyze_heap_block, check allocation stacks
+  - 0xC00000FD (Stack Overflow): Check for deep recursion in stack frames
+  - 0xE06D7363 (C++ Exception): Use get_cpp_exception for type/throw info
+  - 0x80000003 (Breakpoint): Likely assertion failure — check assertion message
+- **Deadlock indicators**: Multiple threads waiting, get_lock_status shows locked critical sections
+- **Memory leak indicators**: Growing heaps (analyze_heap_block summary), high handle counts
 
 **Always ask follow-up questions if:**
 - Dump file path is not provided or unclear
 - User wants specific focus areas for analysis
-- Additional investigation commands are needed
-- Source code context would be helpful
+- Additional investigation is needed for specific code paths
+- Source code context would be helpful for understanding the crash

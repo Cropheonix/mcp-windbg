@@ -1,0 +1,6 @@
+0:000> start             end                 module name
+00007ff7`00130000 00007ff7`00167000   DemoCrash1 C (no symbols)
+00007ffe`731d0000 00007ffe`73264000   apphelp    (deferred)
+00007ffe`761b0000 00007ffe`764a6000   KERNELBASE   (pdb symbols)          C:\ProgramData\dbg\sym\kernelbase.pdb\17BCD4AA8C8C548173F492758FF049E71\kernelbase.pdb
+00007ffe`773a0000 00007ffe`77462000   kernel32   (pdb symbols)          C:\ProgramData\dbg\sym\kernel32.pdb\FDDB30E89C7FBCC52336217166845B451\kernel32.pdb
+00007ffe`78910000 00007ffe`78b08000   ntdll      (pdb symbols)          C:\ProgramData\dbg\sym\ntdll.pdb\9FF79BBA19EBED309623072EA067B20F1\ntdll.pdb

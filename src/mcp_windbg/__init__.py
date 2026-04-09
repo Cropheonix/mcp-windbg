@@ -24,14 +24,26 @@ def main():
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind HTTP server to (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind HTTP server to (default: 8000)")
 
+    # Source code options
+    parser.add_argument(
+        "--source-roots",
+        nargs="+",
+        type=str,
+        default=[],
+        help="Source code root directories for source correlation"
+    )
+
     args = parser.parse_args()
+
+    source_roots = args.source_roots if args.source_roots else None
 
     if args.transport == "stdio":
         asyncio.run(serve(
             cdb_path=args.cdb_path,
             symbols_path=args.symbols_path,
             timeout=args.timeout,
-            verbose=args.verbose
+            verbose=args.verbose,
+            source_roots=source_roots,
         ))
     else:
         asyncio.run(serve_http(
@@ -40,7 +52,8 @@ def main():
             cdb_path=args.cdb_path,
             symbols_path=args.symbols_path,
             timeout=args.timeout,
-            verbose=args.verbose
+            verbose=args.verbose,
+            source_roots=source_roots,
         ))
 
 
